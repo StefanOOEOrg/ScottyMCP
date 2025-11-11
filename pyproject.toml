@@ -1,9 +1,9 @@
 [project]
-name = "scottymcp"
-version = "0.1.0"
-description = "MCP Server for ÖBB (Austrian Federal Railways) providing real-time train schedules, station information, and connection data"
+name = "transitmcp"
+version = "0.2.0"
+description = "MCP Server for public transit information across Europe via HAFAS API (ÖBB, DB, SBB, NS, and more)"
 authors = [
-    {name = "ScottyMCP Contributors"}
+    {name = "TransitMCP Contributors"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"

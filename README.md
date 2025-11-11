@@ -1,235 +1,292 @@
-# ScottyMCP
+# TransitMCP
 
-MCP Server for ÖBB (Austrian Federal Railways) providing real-time train schedules, station information, and connection data.
+**Multi-Provider MCP Server for European Public Transit Information**
 
-## Overview
+TransitMCP is a Model Context Protocol (MCP) server that provides real-time public transit information across Europe via the HAFAS API. Support for multiple transit providers including ÖBB (Austria), Deutsche Bahn (Germany), SBB (Switzerland), NS (Netherlands), and more.
 
-ScottyMCP is a Model Context Protocol (MCP) server that provides access to Austrian Federal Railways (ÖBB) data through the HAFAS API. It allows AI assistants like Claude to search for train stations, plan journeys, check departures and arrivals, all in real-time.
+## 🌍 Supported Transit Providers
 
-## Features
+| Provider | Country | Profile ID | Description |
+|----------|---------|------------|-------------|
+| **ÖBB** | 🇦🇹 Austria | `oebb` | Austrian Federal Railways |
+| **Deutsche Bahn** | 🇩🇪 Germany | `db` | German Federal Railway |
+| **SBB** | 🇨🇭 Switzerland | `sbb` | Swiss Federal Railways |
+| **NS** | 🇳🇱 Netherlands | `ns` | Nederlandse Spoorwegen |
+| **NVV** | 🇩🇪 Germany | `nvv` | Nordhessischer Verkehrsverbund |
+| **VSN** | 🇩🇪 Germany | `vsn` | Verkehrsverbund Süd-Niedersachsen |
 
-- **Station Search**: Find train stations by name across Austria and neighboring countries
-- **Journey Planning**: Get train connections between stations with detailed schedules
-- **Departures**: Check upcoming departures from any station
-- **Arrivals**: Monitor arriving trains at stations
-- **Real-time Data**: Access current timetables and delay information
+*Additional HAFAS providers can be added via configuration*
 
-## Requirements
+## ✨ Features
+
+- **Multi-Provider Support**: Switch between different transit providers on the fly
+- **Station Search**: Find stations by name across Europe
+- **Journey Planning**: Get connections with transfers, times, and durations
+- **Real-Time Departures**: Check upcoming departures from any station
+- **Real-Time Arrivals**: Monitor arriving trains/buses at stations
+- **Delay Information**: Get real-time delay and platform change notifications
+
+## 📋 Requirements
 
 - Python 3.10 or higher
 - MCP-compatible client (e.g., Claude Desktop)
 
-## Installation
+## 🚀 Installation
 
-1. Clone the repository:
+### 1. Clone the Repository
+
 ```bash
-git clone https://github.com/yourusername/ScottyMCP.git
-cd ScottyMCP
+git clone https://github.com/StefanOOE/transit-mcp.git
+cd transit-mcp
 ```
 
-2. Install dependencies:
+### 2. Install Dependencies
+
 ```bash
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-Or install in development mode:
+### 3. Configure Transit Provider
+
+Set your default transit provider via environment variable (optional):
+
 ```bash
-pip install -e .
+export TRANSIT_PROFILE=oebb  # Default is 'oebb'
+# Options: oebb, db, sbb, ns, nvv, vsn
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 ### Claude Desktop
 
-To use ScottyMCP with Claude Desktop, add the following to your Claude Desktop configuration file:
+Add to your Claude Desktop configuration file:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
-    "scottymcp": {
-      "command": "python",
+    "transit": {
+      "command": "/absolute/path/to/transit-mcp/venv/bin/python",
       "args": [
-        "/absolute/path/to/ScottyMCP/run_server.py"
-      ]
+        "/absolute/path/to/transit-mcp/run_server.py"
+      ],
+      "env": {
+        "TRANSIT_PROFILE": "oebb"
+      }
     }
   }
 }
 ```
 
-Replace `/absolute/path/to/ScottyMCP/` with the actual path to your ScottyMCP installation.
+**Change the provider**: Modify `TRANSIT_PROFILE` to any supported provider ID.
 
-### Other MCP Clients
+## 🔧 Available Tools
 
-For other MCP clients, use the following command to start the server:
+### 1. `list_transit_profiles`
 
-```bash
-python run_server.py
+List all available transit provider profiles.
+
+**Example**:
+```
+List all available transit providers
 ```
 
-## Available Tools
+### 2. `set_transit_profile`
 
-### search_stations
+Switch to a different transit provider.
 
-Search for train stations by name.
+**Parameters**:
+- `profile` (string): Profile ID (e.g., 'db', 'sbb', 'ns')
 
-**Parameters:**
-- `query` (string, required): Station name or partial name
-- `max_results` (integer, optional): Maximum number of results (default: 10)
-
-**Example:**
+**Example**:
 ```
-Search for "Wien Hauptbahnhof"
+Switch to Deutsche Bahn profile
 ```
 
-### get_journeys
+### 3. `search_stations`
 
-Find train connections between two stations.
+Search for stations by name.
 
-**Parameters:**
-- `origin` (string, required): Origin station name or ID
-- `destination` (string, required): Destination station name or ID
-- `date` (string, optional): Journey date in YYYY-MM-DD format
-- `time` (string, optional): Journey time in HH:MM format
-- `max_journeys` (integer, optional): Maximum journeys to return (default: 5)
+**Parameters**:
+- `query` (string): Station name or partial name
+- `max_results` (int, optional): Maximum results (default: 10)
 
-**Example:**
+**Example**:
 ```
-Find connections from "Wien" to "Salzburg" at 14:00
+Search for "Vienna Central Station"
 ```
 
-### get_departures
+### 4. `get_journeys`
+
+Find connections between two stations.
+
+**Parameters**:
+- `origin` (string): Origin station name
+- `destination` (string): Destination station name
+- `date` (string, optional): Date in YYYY-MM-DD format
+- `time` (string, optional): Time in HH:MM format
+- `max_journeys` (int, optional): Maximum journeys (default: 5)
+
+**Example**:
+```
+Find trains from Vienna to Salzburg tomorrow at 14:00
+```
+
+### 5. `get_departures`
 
 Get upcoming departures from a station.
 
-**Parameters:**
-- `station` (string, required): Station name or ID
-- `max_departures` (integer, optional): Maximum departures to return (default: 10)
+**Parameters**:
+- `station` (string): Station name
+- `max_departures` (int, optional): Maximum departures (default: 10)
 
-**Example:**
+**Example**:
 ```
-Show departures from "Innsbruck Hauptbahnhof"
+Show departures from Amsterdam Central Station
 ```
 
-### get_arrivals
+### 6. `get_arrivals`
 
 Get upcoming arrivals at a station.
 
-**Parameters:**
-- `station` (string, required): Station name or ID
-- `max_arrivals` (integer, optional): Maximum arrivals to return (default: 10)
+**Parameters**:
+- `station` (string): Station name
+- `max_arrivals` (int, optional): Maximum arrivals (default: 10)
 
-**Example:**
+**Example**:
 ```
-Show arrivals at "Graz Hauptbahnhof"
+Show arrivals at Zurich HB
 ```
 
-## Usage Examples
+## 💡 Usage Examples
 
-Once configured with Claude Desktop, you can ask questions like:
+Once configured with Claude Desktop, you can ask:
 
+### Austria (ÖBB)
 - "What trains go from Vienna to Salzburg this afternoon?"
-- "When is the next train from Innsbruck?"
-- "Show me departures from Linz Hauptbahnhof"
-- "Find connections from Graz to Klagenfurt tomorrow at 9am"
+- "Show me departures from Innsbruck Hauptbahnhof"
+- "Find connections from Graz to Linz tomorrow morning"
 
-## Development
+### Germany (Deutsche Bahn)
+- "Trains from Berlin to Munich?"
+- "Switch to Deutsche Bahn and find connections to Hamburg"
+- "Departures from Frankfurt Hauptbahnhof"
 
-### Project Structure
+### Switzerland (SBB)
+- "Set profile to SBB and search for Zurich stations"
+- "Trains from Geneva to Bern"
+- "What time does the next train to Lucerne leave?"
+
+### Netherlands (NS)
+- "Use NS profile and find Amsterdam stations"
+- "Trains from Rotterdam to Utrecht"
+- "Show departures from Den Haag Centraal"
+
+## 📁 Project Structure
 
 ```
-ScottyMCP/
+transit-mcp/
 ├── src/
-│   └── scottymcp/
-│       ├── __init__.py
-│       └── server.py          # Main MCP server implementation
-├── run_server.py              # Entry point
-├── requirements.txt           # Python dependencies
-├── pyproject.toml            # Project metadata
-├── setup.py                  # Setup configuration
-└── README.md                 # This file
+│   └── transitmcp/
+│       ├── __init__.py       # Package initialization
+│       ├── profiles.py       # Transit provider profiles
+│       └── server.py         # Main MCP server
+├── examples/
+│   └── usage_examples.md     # Detailed usage examples
+├── tests/
+│   ├── __init__.py
+│   └── test_server.py       # Tests
+├── run_server.py            # Entry point
+├── requirements.txt         # Dependencies
+├── pyproject.toml          # Project metadata
+├── setup.py                # Setup configuration
+├── README.md               # This file
+├── INSTALL.md              # Installation guide
+├── CONTRIBUTING.md         # Contributing guidelines
+└── CHANGELOG.md            # Version history
 ```
 
-### Running Tests
+## 🔒 Technical Details
 
-```bash
-pytest
-```
+- **MCP SDK**: Official Python MCP SDK (≥1.2.0)
+- **HAFAS Client**: pyhafas library (≥0.4.0)
+- **Protocol**: stdio-based communication (MCP standard)
+- **Architecture**: Multi-profile support with runtime switching
+- **Error Handling**: Comprehensive SSL and network error handling
 
-### Code Formatting
-
-```bash
-black src/
-ruff check src/
-```
-
-## Technical Details
-
-- **MCP SDK**: Uses the official Python MCP SDK (mcp >= 1.2.0)
-- **HAFAS Client**: Uses pyhafas for accessing HAFAS APIs
-- **Protocol**: Communicates via stdio as per MCP specification
-- **Transport Types**: Supports trains, buses, and other public transport
-
-## Limitations
-
-- Currently uses DB (Deutsche Bahn) profile as ÖBB-specific profile may need adjustment
-- Real-time data depends on HAFAS API availability
-- Some features may vary based on the HAFAS backend configuration
-
-## Known Issues
+## ⚠️ Known Issues
 
 ### SSL Certificate Errors
 
-The server may encounter SSL certificate verification errors when connecting to the HAFAS API. This is a known issue with some HAFAS endpoints. When this occurs, the server will:
+Some HAFAS endpoints may encounter SSL certificate verification errors. When this occurs:
 
-1. Log the error for debugging
-2. Return a helpful message directing users to alternative resources:
-   - ÖBB Website: https://www.oebb.at
-   - ÖBB Scotty App (iOS/Android)
-   - ÖBB Customer Service: 05-1717
+1. The server logs the error for debugging
+2. Users receive helpful messages with alternatives:
+   - Official provider website
+   - Mobile apps
+   - Customer service contacts
 
 ### Workarounds
 
-If you encounter SSL errors, you can try:
+```bash
+# Update certificates
+pip install --upgrade certifi
 
-1. **Update certificates**:
-   ```bash
-   pip install --upgrade certifi
-   ```
+# Update pyhafas
+pip install --upgrade pyhafas
+```
 
-2. **Check for pyhafas updates**:
-   ```bash
-   pip install --upgrade pyhafas
-   ```
+## 🚧 Limitations
 
-3. **Use alternative ÖBB services**: The official ÖBB website and mobile apps provide the same information
+- Some providers use DB profile as fallback (pending dedicated profiles)
+- Real-time data depends on HAFAS API availability
+- Features may vary between providers
 
-### Future Improvements
+## 🔮 Planned Improvements
 
-- Implement a dedicated ÖBB HAFAS profile
-- Add direct HAFAS API implementation as fallback
-- Improve SSL certificate handling
-- Add retry logic with exponential backoff
+- [ ] Dedicated HAFAS profiles for each provider
+- [ ] Direct HAFAS API implementation as fallback
+- [ ] Enhanced SSL certificate handling
+- [ ] Retry logic with exponential backoff
+- [ ] Support for more European transit providers
+- [ ] Fare and pricing information
+- [ ] Service disruption alerts
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## License
+Areas for contribution:
+- Additional transit provider profiles
+- Improved error handling
+- Documentation and examples
+- Tests
+- Bug fixes
 
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
+## 📄 License
 
-## Acknowledgments
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
 
 - Built with the [Model Context Protocol](https://modelcontextprotocol.io/)
 - Uses [pyhafas](https://github.com/FahrplanDatenGarten/pyhafas) for HAFAS API access
-- Inspired by the oebb-hafas JavaScript library
+- HAFAS is a product of [HaCon](https://www.hacon.de/) (Siemens Mobility)
 
-## Support
+## 📞 Support
 
-For issues and questions:
-- Open an issue on GitHub
-- Check the [MCP documentation](https://modelcontextprotocol.io/)
-- Review the [pyhafas documentation](https://pyhafas.readthedocs.io/)
+- **Issues**: [GitHub Issues](https://github.com/StefanOOE/transit-mcp/issues)
+- **MCP Documentation**: https://modelcontextprotocol.io/
+- **pyhafas Documentation**: https://pyhafas.readthedocs.io/
+
+---
+
+**Note**: This is an unofficial, community-maintained project. For official transit information, please use the respective provider's official website or mobile app.

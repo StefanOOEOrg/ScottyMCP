@@ -1,10 +1,10 @@
-"""Setup script for ScottyMCP."""
+"""Setup script for TransitMCP."""
 
 from setuptools import setup, find_packages
 
 setup(
-    name="scottymcp",
-    version="0.1.0",
+    name="transitmcp",
+    version="0.2.0",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     python_requires=">=3.10",
@@ -14,7 +14,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "scottymcp=scottymcp.server:main",
+            "transitmcp=transitmcp.server:main",
         ],
     },
 )

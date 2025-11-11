@@ -1,41 +1,103 @@
-"""MCP Server for ÖBB (Austrian Federal Railways) HAFAS API."""
+"""MCP Server for Public Transit Information across Europe via HAFAS API."""
 
 import logging
 import ssl
+import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from mcp.server import Server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, TextContent
 from pyhafas import HafasClient
-from pyhafas.profile import DBProfile
+
+from .profiles import get_profile, list_profiles, TransitProfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize the MCP server
-app = Server("scottymcp")
+app = Server("transitmcp")
 
-# Initialize HAFAS client with DB profile
-# Note: ÖBB uses HAFAS but there's no dedicated ÖBB profile in pyhafas yet
-# The DB profile is used as a fallback, but may have SSL certificate issues
-try:
-    hafas_client = HafasClient(DBProfile())
-    logger.info("HAFAS client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize HAFAS client: {e}")
-    hafas_client = None
+# Global variables for current profile and client
+current_profile: Optional[TransitProfile] = None
+hafas_client: Optional[HafasClient] = None
+
+
+def initialize_client(profile_name: str = None) -> bool:
+    """Initialize HAFAS client with specified profile.
+
+    Args:
+        profile_name: Name of the profile to use (e.g., 'oebb', 'db', 'sbb', 'ns')
+                     If None, uses TRANSIT_PROFILE env variable or defaults to 'oebb'
+
+    Returns:
+        True if initialization successful, False otherwise
+    """
+    global current_profile, hafas_client
+
+    # Determine profile to use
+    if profile_name is None:
+        profile_name = os.getenv("TRANSIT_PROFILE", "oebb")
+
+    # Get profile configuration
+    profile = get_profile(profile_name)
+    if profile is None:
+        logger.error(f"Unknown profile: {profile_name}")
+        return False
+
+    try:
+        current_profile = profile
+        hafas_client = HafasClient(profile.hafas_profile)
+        logger.info(f"HAFAS client initialized successfully with {profile.name} profile")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to initialize HAFAS client: {e}")
+        hafas_client = None
+        return False
+
+
+# Initialize on module load
+initialize_client()
 
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
-    """List available tools for ÖBB train information."""
+    """List available tools for transit information."""
     return [
+        Tool(
+            name="list_transit_profiles",
+            description=(
+                "List all available transit provider profiles (ÖBB, DB, SBB, NS, etc.). "
+                "Shows which countries and providers are supported."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="set_transit_profile",
+            description=(
+                "Switch to a different transit provider profile. "
+                "Use 'oebb' for Austria, 'db' for Germany, 'sbb' for Switzerland, "
+                "'ns' for Netherlands, etc."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "profile": {
+                        "type": "string",
+                        "description": "Profile ID (e.g., 'oebb', 'db', 'sbb', 'ns')",
+                    },
+                },
+                "required": ["profile"],
+            },
+        ),
         Tool(
             name="search_stations",
             description=(
-                "Search for train stations in Austria and neighboring countries. "
+                "Search for train/transit stations by name. "
                 "Returns station names, IDs, and locations. "
                 "Use this to find station IDs needed for journey planning."
             ),
@@ -44,7 +106,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Station name or partial name to search for (e.g., 'Wien', 'Salzburg', 'Innsbruck')",
+                        "description": "Station name or partial name to search for",
                     },
                     "max_results": {
                         "type": "integer",
@@ -58,9 +120,8 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_journeys",
             description=(
-                "Find train connections between two stations. "
-                "Returns journey options with departure/arrival times, transfers, and durations. "
-                "Use station IDs from search_stations or provide station names."
+                "Find transit connections between two stations. "
+                "Returns journey options with departure/arrival times, transfers, and durations."
             ),
             inputSchema={
                 "type": "object",
@@ -94,8 +155,7 @@ async def list_tools() -> list[Tool]:
             name="get_departures",
             description=(
                 "Get upcoming departures from a specific station. "
-                "Shows train number, destination, platform, and departure time. "
-                "Useful for checking live departure boards."
+                "Shows train/bus number, destination, platform, and departure time."
             ),
             inputSchema={
                 "type": "object",
@@ -109,17 +169,6 @@ async def list_tools() -> list[Tool]:
                         "description": "Maximum number of departures to return (default: 10)",
                         "default": 10,
                     },
-                    "products": {
-                        "type": "object",
-                        "description": "Filter by transport types (optional)",
-                        "properties": {
-                            "ice_trains": {"type": "boolean", "default": True},
-                            "intercity_trains": {"type": "boolean", "default": True},
-                            "regional_trains": {"type": "boolean", "default": True},
-                            "suburban_trains": {"type": "boolean", "default": True},
-                            "buses": {"type": "boolean", "default": True},
-                        },
-                    },
                 },
                 "required": ["station"],
             },
@@ -128,8 +177,7 @@ async def list_tools() -> list[Tool]:
             name="get_arrivals",
             description=(
                 "Get upcoming arrivals at a specific station. "
-                "Shows train number, origin, platform, and arrival time. "
-                "Useful for checking when trains arrive at a station."
+                "Shows train/bus number, origin, platform, and arrival time."
             ),
             inputSchema={
                 "type": "object",
@@ -152,18 +200,16 @@ async def list_tools() -> list[Tool]:
 
 @app.call_tool()
 async def call_tool(name: str, arguments: Any) -> list[TextContent]:
-    """Handle tool calls for ÖBB train information."""
-    # Check if HAFAS client is available
+    """Handle tool calls for transit information."""
+    # Handle profile management tools
+    if name == "list_transit_profiles":
+        return await handle_list_profiles()
+    elif name == "set_transit_profile":
+        return await handle_set_profile(arguments)
+
+    # Check if HAFAS client is available for other tools
     if hafas_client is None:
-        error_msg = (
-            "⚠️ Der ÖBB HAFAS Service ist derzeit nicht verfügbar.\n\n"
-            "Dies kann an SSL-Zertifikatsproblemen oder Netzwerkproblemen liegen. "
-            "Bitte nutzen Sie stattdessen:\n\n"
-            "- **ÖBB Website**: https://www.oebb.at\n"
-            "- **ÖBB Scotty App**: Verfügbar für iOS und Android\n"
-            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
-            "Technischer Hinweis: pyhafas konnte nicht initialisiert werden."
-        )
+        error_msg = get_error_message("unavailable")
         return [TextContent(type="text", text=error_msg)]
 
     try:
@@ -179,58 +225,124 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
     except ssl.SSLError as e:
         logger.error(f"SSL error in tool {name}: {e}", exc_info=True)
-        error_msg = (
-            "⚠️ SSL-Zertifikatsfehler beim Zugriff auf die ÖBB-Datenbank.\n\n"
-            "Die Verbindung zur HAFAS API konnte aufgrund von Zertifikatsproblemen "
-            "nicht hergestellt werden. Bitte verwenden Sie alternativ:\n\n"
-            "- **ÖBB Website**: https://www.oebb.at\n"
-            "- **ÖBB Scotty App**: Für iOS und Android verfügbar\n"
-            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
-            f"Technischer Fehler: {str(e)}"
-        )
+        error_msg = get_error_message("ssl")
         return [TextContent(type="text", text=error_msg)]
     except Exception as e:
         logger.error(f"Error executing tool {name}: {e}", exc_info=True)
-        error_msg = (
-            "⚠️ Technisches Problem beim Abruf der ÖBB-Informationen.\n\n"
-            "Leider konnte die Information gerade nicht abgerufen werden. "
-            "Bitte versuchen Sie es über:\n\n"
-            "- **ÖBB Website**: https://www.oebb.at\n"
-            "- **ÖBB Scotty App**: Für iOS und Android verfügbar\n"
-            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
-            f"Technischer Fehler: {str(e)}"
-        )
+        error_msg = get_error_message("general", str(e))
         return [TextContent(type="text", text=error_msg)]
 
 
+def get_error_message(error_type: str, technical_detail: str = "") -> str:
+    """Get appropriate error message based on current profile and error type."""
+    if current_profile is None:
+        provider_info = "the transit provider"
+        website = "your transit provider's website"
+    else:
+        provider_info = current_profile.name
+        # Provider-specific websites
+        websites = {
+            "oebb": "https://www.oebb.at",
+            "db": "https://www.bahn.de",
+            "sbb": "https://www.sbb.ch",
+            "ns": "https://www.ns.nl",
+        }
+        website = websites.get(current_profile.name.lower(), "your transit provider's website")
+
+    if error_type == "unavailable":
+        return (
+            f"⚠️ The {provider_info} transit service is currently unavailable.\n\n"
+            f"This may be due to SSL certificate issues or network problems. "
+            f"Please use alternative resources:\n\n"
+            f"- **Official Website**: {website}\n"
+            f"- **Mobile App**: Available for your transit provider\n\n"
+            f"Technical note: HAFAS client could not be initialized."
+        )
+    elif error_type == "ssl":
+        return (
+            f"⚠️ SSL certificate error when accessing {provider_info} database.\n\n"
+            f"The connection could not be established due to certificate issues. "
+            f"Please use alternative resources:\n\n"
+            f"- **Official Website**: {website}\n"
+            f"- **Mobile App**: Check your app store\n\n"
+            f"Technical error: SSL certificate verification failed"
+        )
+    else:  # general
+        return (
+            f"⚠️ Technical problem retrieving {provider_info} information.\n\n"
+            f"Unfortunately, the information could not be retrieved. "
+            f"Please try:\n\n"
+            f"- **Official Website**: {website}\n"
+            f"- **Mobile App**: Available for download\n\n"
+            f"Technical error: {technical_detail}"
+        )
+
+
+async def handle_list_profiles() -> list[TextContent]:
+    """List all available transit profiles."""
+    profiles = list_profiles()
+
+    result = "# Available Transit Profiles\n\n"
+    result += f"**Current profile**: {current_profile.name if current_profile else 'None'}\n\n"
+
+    for profile in profiles:
+        result += f"### {profile['id']}\n"
+        result += f"- **Name**: {profile['name']}\n"
+        result += f"- **Country**: {profile['country']}\n"
+        result += f"- **Description**: {profile['description']}\n"
+        result += f"- **Language**: {profile['language']}\n\n"
+
+    result += "\nUse `set_transit_profile` to switch between profiles."
+
+    return [TextContent(type="text", text=result)]
+
+
+async def handle_set_profile(arguments: dict) -> list[TextContent]:
+    """Set the active transit profile."""
+    profile_name = arguments["profile"]
+
+    if initialize_client(profile_name):
+        return [TextContent(
+            type="text",
+            text=f"✓ Successfully switched to {current_profile.name} ({current_profile.country})"
+        )]
+    else:
+        available = ", ".join(list_profiles())
+        return [TextContent(
+            type="text",
+            text=f"✗ Failed to switch to profile '{profile_name}'. Available profiles: {available}"
+        )]
+
+
 async def search_stations(arguments: dict) -> list[TextContent]:
-    """Search for train stations."""
+    """Search for transit stations."""
     query = arguments["query"]
     max_results = arguments.get("max_results", 10)
 
-    logger.info(f"Searching for stations: {query}")
+    logger.info(f"Searching for stations: {query} (profile: {current_profile.name})")
 
     try:
         locations = hafas_client.locations(query)
 
         if not locations:
-            return [TextContent(type="text", text=f"No stations found for query: {query}")]
+            return [TextContent(
+                type="text",
+                text=f"No stations found for query: {query} (using {current_profile.name} profile)"
+            )]
 
         # Format results
         results = []
-        for i, location in enumerate(locations[:max_results]):
+        for location in locations[:max_results]:
             station_info = f"**{location.name}**\n"
             station_info += f"- ID: `{location.id}`\n"
 
             if hasattr(location, 'lat') and location.lat and hasattr(location, 'lon') and location.lon:
                 station_info += f"- Coordinates: {location.lat}, {location.lon}\n"
 
-            if hasattr(location, 'products') and location.products:
-                station_info += f"- Available products: {location.products}\n"
-
             results.append(station_info)
 
-        result_text = f"Found {len(results)} station(s) for '{query}':\n\n" + "\n".join(results)
+        result_text = f"Found {len(results)} station(s) for '{query}' ({current_profile.name}):\n\n"
+        result_text += "\n".join(results)
         return [TextContent(type="text", text=result_text)]
 
     except Exception as e:
@@ -246,7 +358,7 @@ async def get_journeys(arguments: dict) -> list[TextContent]:
     time_str = arguments.get("time")
     max_journeys = arguments.get("max_journeys", 5)
 
-    logger.info(f"Getting journeys from {origin} to {destination}")
+    logger.info(f"Getting journeys from {origin} to {destination} (profile: {current_profile.name})")
 
     try:
         # Parse date and time if provided
@@ -296,14 +408,11 @@ async def get_journeys(arguments: dict) -> list[TextContent]:
                 for j, leg in enumerate(journey.legs):
                     journey_info += f"{j + 1}. {leg.name or 'Transfer'}: "
                     journey_info += f"{leg.origin.name} → {leg.destination.name}\n"
-                    if hasattr(leg, 'departure') and leg.departure:
-                        journey_info += f"   Departs: {leg.departure}\n"
-                    if hasattr(leg, 'arrival') and leg.arrival:
-                        journey_info += f"   Arrives: {leg.arrival}\n"
 
             results.append(journey_info)
 
         result_text = f"Found {len(results)} journey(ies) from **{origin_locations[0].name}** to **{dest_locations[0].name}**:\n\n"
+        result_text += f"*(Using {current_profile.name} profile)*\n\n"
         result_text += "\n---\n\n".join(results)
         return [TextContent(type="text", text=result_text)]
 
@@ -317,7 +426,7 @@ async def get_departures(arguments: dict) -> list[TextContent]:
     station = arguments["station"]
     max_departures = arguments.get("max_departures", 10)
 
-    logger.info(f"Getting departures from: {station}")
+    logger.info(f"Getting departures from: {station} (profile: {current_profile.name})")
 
     try:
         # Get station location
@@ -341,6 +450,7 @@ async def get_departures(arguments: dict) -> list[TextContent]:
         # Format results
         results = []
         results.append(f"# Departures from {station_name}\n")
+        results.append(f"*(Using {current_profile.name} profile)*\n")
 
         for departure in departures[:max_departures]:
             dep_info = f"**{departure.name}** to {departure.direction}\n"
@@ -367,7 +477,7 @@ async def get_arrivals(arguments: dict) -> list[TextContent]:
     station = arguments["station"]
     max_arrivals = arguments.get("max_arrivals", 10)
 
-    logger.info(f"Getting arrivals at: {station}")
+    logger.info(f"Getting arrivals at: {station} (profile: {current_profile.name})")
 
     try:
         # Get station location
@@ -391,9 +501,14 @@ async def get_arrivals(arguments: dict) -> list[TextContent]:
         # Format results
         results = []
         results.append(f"# Arrivals at {station_name}\n")
+        results.append(f"*(Using {current_profile.name} profile)*\n")
 
         for arrival in arrivals[:max_arrivals]:
-            arr_info = f"**{arrival.name}** from {arrival.origin.name if hasattr(arrival, 'origin') else 'unknown'}\n"
+            arr_info = f"**{arrival.name}**"
+            if hasattr(arrival, 'origin') and arrival.origin:
+                arr_info += f" from {arrival.origin.name}\n"
+            else:
+                arr_info += "\n"
             arr_info += f"- Arrival: {arrival.arrival}\n"
 
             if hasattr(arrival, 'platform') and arrival.platform:
