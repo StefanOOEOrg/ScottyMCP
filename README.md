@@ -178,6 +178,41 @@ ruff check src/
 - Real-time data depends on HAFAS API availability
 - Some features may vary based on the HAFAS backend configuration
 
+## Known Issues
+
+### SSL Certificate Errors
+
+The server may encounter SSL certificate verification errors when connecting to the HAFAS API. This is a known issue with some HAFAS endpoints. When this occurs, the server will:
+
+1. Log the error for debugging
+2. Return a helpful message directing users to alternative resources:
+   - ÖBB Website: https://www.oebb.at
+   - ÖBB Scotty App (iOS/Android)
+   - ÖBB Customer Service: 05-1717
+
+### Workarounds
+
+If you encounter SSL errors, you can try:
+
+1. **Update certificates**:
+   ```bash
+   pip install --upgrade certifi
+   ```
+
+2. **Check for pyhafas updates**:
+   ```bash
+   pip install --upgrade pyhafas
+   ```
+
+3. **Use alternative ÖBB services**: The official ÖBB website and mobile apps provide the same information
+
+### Future Improvements
+
+- Implement a dedicated ÖBB HAFAS profile
+- Add direct HAFAS API implementation as fallback
+- Improve SSL certificate handling
+- Add retry logic with exponential backoff
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues.

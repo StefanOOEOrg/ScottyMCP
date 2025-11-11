@@ -1,6 +1,7 @@
 """MCP Server for ÖBB (Austrian Federal Railways) HAFAS API."""
 
 import logging
+import ssl
 from datetime import datetime
 from typing import Any
 
@@ -16,9 +17,15 @@ logger = logging.getLogger(__name__)
 # Initialize the MCP server
 app = Server("scottymcp")
 
-# Initialize HAFAS client with DB profile (which also works for ÖBB)
-# Note: pyhafas may need specific ÖBB profile configuration
-hafas_client = HafasClient(DBProfile())
+# Initialize HAFAS client with DB profile
+# Note: ÖBB uses HAFAS but there's no dedicated ÖBB profile in pyhafas yet
+# The DB profile is used as a fallback, but may have SSL certificate issues
+try:
+    hafas_client = HafasClient(DBProfile())
+    logger.info("HAFAS client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize HAFAS client: {e}")
+    hafas_client = None
 
 
 @app.list_tools()
@@ -146,6 +153,19 @@ async def list_tools() -> list[Tool]:
 @app.call_tool()
 async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     """Handle tool calls for ÖBB train information."""
+    # Check if HAFAS client is available
+    if hafas_client is None:
+        error_msg = (
+            "⚠️ Der ÖBB HAFAS Service ist derzeit nicht verfügbar.\n\n"
+            "Dies kann an SSL-Zertifikatsproblemen oder Netzwerkproblemen liegen. "
+            "Bitte nutzen Sie stattdessen:\n\n"
+            "- **ÖBB Website**: https://www.oebb.at\n"
+            "- **ÖBB Scotty App**: Verfügbar für iOS und Android\n"
+            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
+            "Technischer Hinweis: pyhafas konnte nicht initialisiert werden."
+        )
+        return [TextContent(type="text", text=error_msg)]
+
     try:
         if name == "search_stations":
             return await search_stations(arguments)
@@ -157,9 +177,30 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return await get_arrivals(arguments)
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
+    except ssl.SSLError as e:
+        logger.error(f"SSL error in tool {name}: {e}", exc_info=True)
+        error_msg = (
+            "⚠️ SSL-Zertifikatsfehler beim Zugriff auf die ÖBB-Datenbank.\n\n"
+            "Die Verbindung zur HAFAS API konnte aufgrund von Zertifikatsproblemen "
+            "nicht hergestellt werden. Bitte verwenden Sie alternativ:\n\n"
+            "- **ÖBB Website**: https://www.oebb.at\n"
+            "- **ÖBB Scotty App**: Für iOS und Android verfügbar\n"
+            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
+            f"Technischer Fehler: {str(e)}"
+        )
+        return [TextContent(type="text", text=error_msg)]
     except Exception as e:
         logger.error(f"Error executing tool {name}: {e}", exc_info=True)
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        error_msg = (
+            "⚠️ Technisches Problem beim Abruf der ÖBB-Informationen.\n\n"
+            "Leider konnte die Information gerade nicht abgerufen werden. "
+            "Bitte versuchen Sie es über:\n\n"
+            "- **ÖBB Website**: https://www.oebb.at\n"
+            "- **ÖBB Scotty App**: Für iOS und Android verfügbar\n"
+            "- **ÖBB Kundenservice**: Tel. 05-1717\n\n"
+            f"Technischer Fehler: {str(e)}"
+        )
+        return [TextContent(type="text", text=error_msg)]
 
 
 async def search_stations(arguments: dict) -> list[TextContent]:
