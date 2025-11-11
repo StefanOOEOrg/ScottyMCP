@@ -1,8 +1,14 @@
 """Profile configurations for different transit providers."""
 
+import os
+import ssl
+import urllib3
 from dataclasses import dataclass
 from typing import Optional
 from pyhafas.profile import DBProfile, NVVProfile, VSNProfile
+
+# Disable SSL warnings when SSL verification is disabled
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 @dataclass

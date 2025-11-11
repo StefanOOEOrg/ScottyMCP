@@ -224,24 +224,49 @@ transit-mcp/
 
 ## ⚠️ Known Issues
 
-### SSL Certificate Errors
+### HAFAS API Compatibility
 
-Some HAFAS endpoints may encounter SSL certificate verification errors. When this occurs:
+**Current Status**: The HAFAS API endpoints are experiencing compatibility issues with the pyhafas library:
 
-1. The server logs the error for debugging
-2. Users receive helpful messages with alternatives:
-   - Official provider website
-   - Mobile apps
-   - Customer service contacts
+1. **SSL Certificate Errors**: Certificate hostname mismatch for `reiseauskunft.bahn.de`
+2. **API Response Format**: Some endpoints return HTML instead of expected JSON format
+3. **Library Status**: The pyhafas library may need updates for current HAFAS API versions
 
-### Workarounds
+**Impact**: Station search, journey planning, and real-time data queries may not work reliably.
+
+**Workarounds**:
+
+When TransitMCP encounters these issues, it provides helpful error messages directing users to:
+- Official transit provider websites (e.g., oebb.at, bahn.de, sbb.ch, ns.nl)
+- Mobile apps available for each provider
+- Customer service contacts
+
+**For Testing** (SSL verification bypass):
+
+```json
+{
+  "mcpServers": {
+    "transit": {
+      ...
+      "env": {
+        "TRANSIT_PROFILE": "oebb",
+        "TRANSIT_DISABLE_SSL_VERIFY": "true"
+      }
+    }
+  }
+}
+```
+
+⚠️ **Warning**: Disabling SSL verification is insecure and should only be used for local testing.
+
+**Alternative Solutions**:
 
 ```bash
-# Update certificates
-pip install --upgrade certifi
+# Update to latest versions
+pip install --upgrade certifi pyhafas
 
-# Update pyhafas
-pip install --upgrade pyhafas
+# Check for pyhafas updates
+pip list --outdated | grep pyhafas
 ```
 
 ## 🚧 Limitations

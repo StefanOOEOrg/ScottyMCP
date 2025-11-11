@@ -9,6 +9,9 @@ from typing import Any, Optional
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 from pyhafas import HafasClient
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .profiles import get_profile, list_profiles, TransitProfile
 
@@ -48,8 +51,29 @@ def initialize_client(profile_name: str = None) -> bool:
 
     try:
         current_profile = profile
+
+        # Check if SSL verification should be disabled
+        disable_ssl = os.getenv("TRANSIT_DISABLE_SSL_VERIFY", "false").lower() == "true"
+
+        if disable_ssl:
+            logger.warning("SSL verification is DISABLED - only use for testing!")
+            # Monkey-patch the requests session used by pyhafas
+            original_get = requests.Session.get
+            original_post = requests.Session.post
+
+            def patched_get(self, *args, **kwargs):
+                kwargs['verify'] = False
+                return original_get(self, *args, **kwargs)
+
+            def patched_post(self, *args, **kwargs):
+                kwargs['verify'] = False
+                return original_post(self, *args, **kwargs)
+
+            requests.Session.get = patched_get
+            requests.Session.post = patched_post
+
         hafas_client = HafasClient(profile.hafas_profile)
-        logger.info(f"HAFAS client initialized successfully with {profile.name} profile")
+        logger.info(f"HAFAS client initialized successfully with {profile.name} profile (SSL verify: {not disable_ssl})")
         return True
     except Exception as e:
         logger.error(f"Failed to initialize HAFAS client: {e}")
