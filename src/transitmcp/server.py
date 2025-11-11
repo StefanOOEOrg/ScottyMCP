@@ -8,11 +8,8 @@ from typing import Any, Optional
 
 from mcp.server import Server
 from mcp.types import Tool, TextContent
-from pyhafas import HafasClient
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
+from .hafas_client import HafasClient, HAFAS_CONFIGS
 from .profiles import get_profile, list_profiles, TransitProfile
 
 # Configure logging
@@ -49,31 +46,25 @@ def initialize_client(profile_name: str = None) -> bool:
         logger.error(f"Unknown profile: {profile_name}")
         return False
 
+    # Get HAFAS configuration
+    hafas_config = HAFAS_CONFIGS.get(profile.hafas_profile_id)
+    if hafas_config is None:
+        logger.error(f"No HAFAS configuration for profile: {profile.hafas_profile_id}")
+        return False
+
     try:
         current_profile = profile
 
         # Check if SSL verification should be disabled
         disable_ssl = os.getenv("TRANSIT_DISABLE_SSL_VERIFY", "false").lower() == "true"
 
-        if disable_ssl:
-            logger.warning("SSL verification is DISABLED - only use for testing!")
-            # Monkey-patch the requests session used by pyhafas
-            original_get = requests.Session.get
-            original_post = requests.Session.post
+        # Initialize our custom HAFAS client
+        hafas_client = HafasClient(hafas_config, disable_ssl_verify=disable_ssl)
 
-            def patched_get(self, *args, **kwargs):
-                kwargs['verify'] = False
-                return original_get(self, *args, **kwargs)
-
-            def patched_post(self, *args, **kwargs):
-                kwargs['verify'] = False
-                return original_post(self, *args, **kwargs)
-
-            requests.Session.get = patched_get
-            requests.Session.post = patched_post
-
-        hafas_client = HafasClient(profile.hafas_profile)
-        logger.info(f"HAFAS client initialized successfully with {profile.name} profile (SSL verify: {not disable_ssl})")
+        logger.info(
+            f"HAFAS client initialized successfully with {profile.name} profile "
+            f"(SSL verify: {not disable_ssl})"
+        )
         return True
     except Exception as e:
         logger.error(f"Failed to initialize HAFAS client: {e}")
@@ -346,7 +337,7 @@ async def search_stations(arguments: dict) -> list[TextContent]:
     logger.info(f"Searching for stations: {query} (profile: {current_profile.name})")
 
     try:
-        locations = hafas_client.locations(query)
+        locations = hafas_client.search_locations(query, max_results)
 
         if not locations:
             return [TextContent(
@@ -357,11 +348,20 @@ async def search_stations(arguments: dict) -> list[TextContent]:
         # Format results
         results = []
         for location in locations[:max_results]:
-            station_info = f"**{location.name}**\n"
-            station_info += f"- ID: `{location.id}`\n"
+            # Extract name from location dict
+            name = location.get('name', 'Unknown')
+            lid = location.get('lid', location.get('extId', 'N/A'))
 
-            if hasattr(location, 'lat') and location.lat and hasattr(location, 'lon') and location.lon:
-                station_info += f"- Coordinates: {location.lat}, {location.lon}\n"
+            station_info = f"**{name}**\n"
+            station_info += f"- ID: `{lid}`\n"
+
+            # Check for coordinates
+            if 'crd' in location:
+                crd = location['crd']
+                lat = crd.get('y', 0) / 1000000  # HAFAS uses scaled coordinates
+                lon = crd.get('x', 0) / 1000000
+                if lat != 0 and lon != 0:
+                    station_info += f"- Coordinates: {lat:.6f}, {lon:.6f}\n"
 
             results.append(station_info)
 
@@ -370,7 +370,7 @@ async def search_stations(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=result_text)]
 
     except Exception as e:
-        logger.error(f"Error searching stations: {e}")
+        logger.error(f"Error searching stations: {e}", exc_info=True)
         return [TextContent(type="text", text=f"Error searching stations: {str(e)}")]
 
 

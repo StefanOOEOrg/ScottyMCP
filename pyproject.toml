@@ -1,6 +1,6 @@
 [project]
 name = "transitmcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP Server for public transit information across Europe via HAFAS API (ÖBB, DB, SBB, NS, and more)"
 authors = [
     {name = "TransitMCP Contributors"}

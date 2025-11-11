@@ -8,13 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned Features
-- Dedicated HAFAS profiles for each provider
+- Complete HAFAS request format implementation
 - Trip tracking functionality
 - Fare and pricing information
 - Station facilities and amenities information
 - Real-time platform change notifications
 - Service disruption alerts
 - Support for more European transit providers (SNCF, NMBS, DSB, etc.)
+
+## [0.3.0] - 2025-11-10
+
+### Breaking Changes
+- **Removed pyhafas dependency** - Now using custom direct HAFAS API implementation
+- Reduced supported providers from 6 to 4 (removed NVV, VSN - will be re-added)
+
+### Added
+- Custom HAFAS API client (`hafas_client.py`)
+- Direct HTTP communication with HAFAS mgate.exe endpoints
+- Provider-specific HAFAS configurations (endpoint URLs, authentication)
+- HAFAS_CONFIGS dictionary with ÖBB, DB, SBB, NS configurations
+- Proper HAFAS request structure (auth, client, svcReqL)
+
+### Changed
+- `requirements.txt`: Replaced `pyhafas>=0.4.0` with `requests>=2.31.0`
+- Profile structure: Changed from `hafas_profile` to `hafas_profile_id`
+- Client initialization: Now uses `HafasClient` from `hafas_client.py`
+- Station search: Updated to handle HAFAS JSON response format
+
+### Technical Improvements
+- Better control over HAFAS API requests
+- Configurable SSL verification per provider
+- Detailed logging of HAFAS requests
+- JSON response parsing with error handling
+
+### Known Issues
+- HAFAS request format needs fine-tuning (currently returns PARSE errors)
+- Station search not yet working due to protocol refinement needed
+- Need to validate request body structure per provider
+
+### Work in Progress
+- Debugging HAFAS mgate.exe request format
+- Testing with different HAFAS endpoints
+- Request parameter validation
 
 ## [0.2.0] - 2025-11-10
 

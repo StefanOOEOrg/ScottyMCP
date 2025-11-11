@@ -217,22 +217,30 @@ transit-mcp/
 ## 🔒 Technical Details
 
 - **MCP SDK**: Official Python MCP SDK (≥1.2.0)
-- **HAFAS Client**: pyhafas library (≥0.4.0)
+- **HAFAS Client**: Custom direct implementation (removed pyhafas dependency)
 - **Protocol**: stdio-based communication (MCP standard)
 - **Architecture**: Multi-profile support with runtime switching
 - **Error Handling**: Comprehensive SSL and network error handling
+- **Transport**: Direct HTTP requests to HAFAS mgate.exe endpoints
 
 ## ⚠️ Known Issues
 
 ### HAFAS API Compatibility
 
-**Current Status**: The HAFAS API endpoints are experiencing compatibility issues with the pyhafas library:
+**Current Status**: TransitMCP now uses a custom direct HAFAS API implementation (v0.3.0+):
 
-1. **SSL Certificate Errors**: Certificate hostname mismatch for `reiseauskunft.bahn.de`
-2. **API Response Format**: Some endpoints return HTML instead of expected JSON format
-3. **Library Status**: The pyhafas library may need updates for current HAFAS API versions
+✅ **Improvements:**
+- Removed pyhafas dependency for better control
+- Direct HTTP requests to HAFAS mgate.exe endpoints
+- Provider-specific configurations (ÖBB, DB, SBB, NS)
+- SSL verification bypass option for testing
 
-**Impact**: Station search, journey planning, and real-time data queries may not work reliably.
+⚠️ **Work in Progress:**
+- HAFAS request format requires fine-tuning
+- Some endpoints return PARSE errors
+- Request body structure needs adjustment per provider
+
+**Impact**: Core functionality is implemented but requires further HAFAS protocol refinement.
 
 **Workarounds**:
 

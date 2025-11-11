@@ -5,7 +5,6 @@ import ssl
 import urllib3
 from dataclasses import dataclass
 from typing import Optional
-from pyhafas.profile import DBProfile, NVVProfile, VSNProfile
 
 # Disable SSL warnings when SSL verification is disabled
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -18,7 +17,7 @@ class TransitProfile:
     name: str
     country: str
     description: str
-    hafas_profile: any
+    hafas_profile_id: str  # Changed from hafas_profile to profile ID
     language: str = "en"
     timezone: str = "Europe/Berlin"
 
@@ -29,7 +28,7 @@ PROFILES = {
         name="ÖBB",
         country="Austria",
         description="Austrian Federal Railways (Österreichische Bundesbahnen)",
-        hafas_profile=DBProfile(),  # Using DB profile as fallback for ÖBB
+        hafas_profile_id="oebb",
         language="de",
         timezone="Europe/Vienna"
     ),
@@ -37,7 +36,7 @@ PROFILES = {
         name="Deutsche Bahn",
         country="Germany",
         description="German Federal Railway (Deutsche Bahn)",
-        hafas_profile=DBProfile(),
+        hafas_profile_id="db",
         language="de",
         timezone="Europe/Berlin"
     ),
@@ -45,7 +44,7 @@ PROFILES = {
         name="SBB",
         country="Switzerland",
         description="Swiss Federal Railways (Schweizerische Bundesbahnen)",
-        hafas_profile=DBProfile(),  # Using DB profile as fallback for SBB
+        hafas_profile_id="sbb",
         language="de",
         timezone="Europe/Zurich"
     ),
@@ -53,25 +52,9 @@ PROFILES = {
         name="NS",
         country="Netherlands",
         description="Nederlandse Spoorwegen (Dutch Railways)",
-        hafas_profile=DBProfile(),  # Using DB profile as fallback for NS
+        hafas_profile_id="ns",
         language="en",
         timezone="Europe/Amsterdam"
-    ),
-    "nvv": TransitProfile(
-        name="NVV",
-        country="Germany",
-        description="Nordhessischer Verkehrsverbund",
-        hafas_profile=NVVProfile(),
-        language="de",
-        timezone="Europe/Berlin"
-    ),
-    "vsn": TransitProfile(
-        name="VSN",
-        country="Germany",
-        description="Verkehrsverbund Süd-Niedersachsen",
-        hafas_profile=VSNProfile(),
-        language="de",
-        timezone="Europe/Berlin"
     ),
 }
 
